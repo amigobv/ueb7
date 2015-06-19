@@ -1,9 +1,13 @@
 package ueb7.caas.view;
 
+import java.net.MalformedURLException;
 import java.rmi.Naming;
+import java.rmi.NotBoundException;
+import java.rmi.RemoteException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Random;
 
 import javafx.event.ActionEvent;
 import javafx.geometry.HPos;
@@ -19,6 +23,7 @@ import javafx.scene.control.PasswordField;
 import javafx.scene.control.RadioButton;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Separator;
+import javafx.scene.control.SingleSelectionModel;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TextField;
@@ -31,13 +36,14 @@ import javafx.scene.layout.VBox;
 import javafx.scene.text.Text;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
+import ueb7.caas.control.UserManagement;
 import ueb7.caas.model.Admin;
 import ueb7.caas.model.Category;
-import ueb7.caas.model.DayMenu;
 import ueb7.caas.model.User;
-import ueb7.caas.model.Weekdays;
-import ueb7.caas.server.ControlInterface;
-import ueb7.caas.server.UserControlInterface;
+import ueb7.caas.model.Weekday;
+import ueb7.caas.server.MenuInterface;
+import ueb7.caas.server.OrderInterface;
+import ueb7.caas.server.UserInterface;
 import ueb7.caas.time.DateTimePicker;
 
 public class ApplicationView {
@@ -53,9 +59,12 @@ public class ApplicationView {
     private Stage mainStage;
     private Pane rootPane;
     private TabPane menuPane;
-    private ControlInterface ctrl;
     private LoginPane login;
     private List<MenuTab> menus;
+    private UserManagement usrCtrl;
+    private OrderInterface order;
+    private MenuInterface menu;
+    private UserInterface userCtrl;
 
     /**
      * 
@@ -117,8 +126,8 @@ public class ApplicationView {
         private void handleLogin(ActionEvent event) {
             if (event.getTarget() instanceof Button) {
                 try {
-                    ctrl.login(textFieldUsername.getText(), passwordFieldPwd.getText());
-                    if (ctrl.getLoggedUser().isLocked()) {
+                    usrCtrl.setLoggedUser(userCtrl.login(textFieldUsername.getText(), passwordFieldPwd.getText()));
+                    if (usrCtrl.isLogged() && usrCtrl.getLoggedUser().isLocked()) {
                         displayMessage("Konto wurde gesperrt");
                     } else {
                         displayUser();
@@ -132,9 +141,9 @@ public class ApplicationView {
 
         private void displayUser() {
             try {
-                if (ctrl.isLogged()) {
+                if (usrCtrl.isLogged()) {
                     loginGrid.getChildren().clear();
-                    Label username = new Label(ctrl.getLoggedUser().getName());
+                    Label username = new Label(usrCtrl.getLoggedUser().getName());
                     textFieldUsername.setText("");
                     passwordFieldPwd.setText("");
                     loginGrid.getChildren().clear();
@@ -179,13 +188,13 @@ public class ApplicationView {
 
         private void handleLogout(ActionEvent event) {
             if (event.getTarget() instanceof Button) {
-                showLogin();
                 try {
-                    ctrl.logout();
+                    usrCtrl.logout();
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
                 
+                showLogin();
                 refreshMenu();
             }
         }
@@ -226,8 +235,8 @@ public class ApplicationView {
                 return;
 
             try {
-                ctrl.addUser(textFieldUsername.getText(), passwordFieldPwd.getText());
-                System.out.println("Num of users: " + ctrl.noOfUsers());
+                userCtrl.addUser(textFieldUsername.getText(), passwordFieldPwd.getText());
+                System.out.println("Num of users: " + userCtrl.noOfUsers());
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -245,7 +254,7 @@ public class ApplicationView {
      *
      */
     class MenuTab {
-        DayMenu menu;
+        Weekday day;
         Tab tab;
         private ScrollPane scrollContent;
         private Button btnCommand;
@@ -260,9 +269,9 @@ public class ApplicationView {
         private Button btnAddCategorie;
         private TextField newCategorie;
 
-        public MenuTab(DayMenu menu) {
-            this.menu = menu;
-            tab = new Tab(menu.getDay().toString());
+        public MenuTab(Weekday day) {
+            this.day = day;
+            tab = new Tab(day.toString());
 
             scrollContent = new ScrollPane();
             scrollContent.setMinHeight(520);
@@ -279,21 +288,13 @@ public class ApplicationView {
             btnAddCategorie.addEventHandler(ActionEvent.ACTION, (ActionEvent e) -> this.handleAddCategory(e));
         }
 
-        public void addGroup(String name) {
-            menu.addGroup(name);
-        }
-
-        public void addDish(String groupName, String dish) {
-            menu.addDish(groupName, dish);
-        }
-
         public Tab show() {
             tabContent = new VBox();
             tabContent.setId("tabContent");
             tabContent.setPadding(new Insets(10));
             tabContent.setAlignment(Pos.BOTTOM_LEFT);
 
-            refresh();
+            refresh(day);
 
             scrollContent.setContent(tabContent);
             tab.setContent(scrollContent);
@@ -301,18 +302,18 @@ public class ApplicationView {
             return tab;
         }
 
-        public void refresh() {
+        private void refresh(Weekday day) {
             tabContent.getChildren().clear();
-            tabContent.getChildren().add(getMenu());
+            tabContent.getChildren().add(showDayMenu(day));
 
             HBox btnBox = new HBox();
 
             try {
-                if (!ctrl.isLogged()) {
+                if (!usrCtrl.isLogged()) {
                     btnCommand.setVisible(false);
                     btnAddCategorie.setVisible(false);
                 } else {
-                    User user = ctrl.getLoggedUser();
+                    User user = usrCtrl.getLoggedUser();
 
                     if (user instanceof Admin) {
                         btnAddCategorie.setVisible(true);
@@ -338,6 +339,20 @@ public class ApplicationView {
          */
         public String getName() {
             return tab.getText();
+        }
+        
+        /**
+         * 
+         */
+        public Weekday getDay() {
+            return day;
+        }
+        
+        /**
+         * 
+         */
+        public Tab getTab() {
+            return tab;
         }
 
         /**
@@ -367,68 +382,69 @@ public class ApplicationView {
 
             return list;
         }
-
-        /**
-         * create and returns the menu pane
-         * 
-         * @return
-         */
-        private Pane getMenu() {
+        
+        private Pane showDayMenu(Weekday day) {
             int row = 0;
             int col = 0;
 
             GridPane menuGrid = new GridPane();
-            Iterator<Category> it = menu.iterator();
+            
+            try {
+                List<Category> categories = null;
 
-            while (it.hasNext()) {
-                User user = null;
-                try {
-                    user = ctrl.getLoggedUser();
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
+                categories = menu.getDayMenu(day);
 
-                ToggleGroup toggle = new ToggleGroup();
-                Category group = it.next();
-                Text name = new Text(group.getName());
-                name.setUnderline(true);
-                menuGrid.add(name, col, row++);
-
-                Iterator<String> items = group.iterator();
-                while (items.hasNext()) {
-                    String item = items.next();
-                    HBox itemBox = new HBox();
-
-                    Button btnRemove = new Button("-");
-                    btnRemove.setId(group.getName() + "_" + item);
-                    btnRemove.addEventHandler(ActionEvent.ACTION, (ActionEvent e) -> this.handleRemove(e));
-
-                    if (user == null || !(user instanceof Admin)) {
-                        btnRemove.setVisible(false);
+                for (Category category : categories) {
+                    User user = null;
+                    try {
+                        user = usrCtrl.getLoggedUser();
+                    } catch (Exception e) {
+                        e.printStackTrace();
                     }
 
-                    RadioButton radioItem = new RadioButton(item);
-                    radioItem.setToggleGroup(toggle);
+                    ToggleGroup toggle = new ToggleGroup();
+                    Text name = new Text(category.getName());
+                    name.setUnderline(true);
+                    menuGrid.add(name, col, row++);
 
-                    if ((user == null || (user instanceof Admin)) || group.getName() == "Desert") {
-                        radioItem.setDisable(true);
+                    Iterator<String> items = category.iterator();
+                    while (items.hasNext()) {
+                        String item = items.next();
+                        HBox itemBox = new HBox();
+
+                        Button btnRemove = new Button("-");
+                        btnRemove.setId(category.getName() + "_" + item);
+                        btnRemove.addEventHandler(ActionEvent.ACTION, (ActionEvent e) -> this.handleRemove(e));
+
+                        if (user == null || !(user instanceof Admin)) {
+                            btnRemove.setVisible(false);
+                        }
+
+                        RadioButton radioItem = new RadioButton(item);
+                        radioItem.setToggleGroup(toggle);
+
+                        if ((user == null || (user instanceof Admin)) || category.getName() == "Desert") {
+                            radioItem.setDisable(true);
+                        }
+
+                        itemBox.getChildren().addAll(btnRemove, radioItem);
+                        menuGrid.add(itemBox, col, row++);
                     }
 
-                    itemBox.getChildren().addAll(btnRemove, radioItem);
-                    menuGrid.add(itemBox, col, row++);
-                }
+                    if (user != null && (user instanceof Admin)) {
+                        Button btnAddItem = new Button("+");
+                        btnAddItem.setId(category.getName());
+                        btnAddItem.addEventHandler(ActionEvent.ACTION, (ActionEvent e) -> this.handleAdd(e));
+                        menuGrid.add(btnAddItem, col, row++);
+                    }
 
-                if (user != null && (user instanceof Admin)) {
-                    Button btnAddItem = new Button("+");
-                    btnAddItem.setId(group.getName());
-                    btnAddItem.addEventHandler(ActionEvent.ACTION, (ActionEvent e) -> this.handleAdd(e));
-                    menuGrid.add(btnAddItem, col, row++);
-                }
-
-                Separator separateLine = new Separator(Orientation.HORIZONTAL);
-                separateLine.setId("separateLine");
-                GridPane.setHgrow(separateLine, Priority.ALWAYS);
-                menuGrid.add(separateLine, col, row++);
+                    Separator separateLine = new Separator(Orientation.HORIZONTAL);
+                    separateLine.setId("separateLine");
+                    GridPane.setHgrow(separateLine, Priority.ALWAYS);
+                    menuGrid.add(separateLine, col, row++);
+                } 
+            } catch (Exception e) {
+                e.printStackTrace();
             }
 
             return menuGrid;
@@ -445,17 +461,22 @@ public class ApplicationView {
                 String[] id = delete.getId().split("_");
                 Category group = null;
 
-                Iterator<Category> it = menu.iterator();
-                while (it.hasNext()) {
-                    group = it.next();
-                    if (id[0].equals(group.getName())) {
-                        break;
+                try {
+                    List<Category> categories = menu.getDayMenu(day);
+                    
+                    for (Category category: categories) {
+                        if (id[0].equals(category.getName())) {
+                            group = category;
+                            break;
+                        }
                     }
-                }
 
-                if (group != null) {
-                    group.removeDish(id[1]);
-                    refresh();
+                    if (group != null) {
+                        group.removeDish(id[1]);
+                        refresh(day);
+                    }
+                } catch (RemoteException ex) {
+                    ex.printStackTrace();
                 }
             }
         }
@@ -488,7 +509,12 @@ public class ApplicationView {
 
                 int row = 0;
                 for (String item : orderList) {
-
+                    try {
+                        order.addDish(usrCtrl.getLoggedUser(), getMenuDay(), item);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                    
                     orderPane.add(new Label(item), 0, row);
                     row++;
                 }
@@ -507,6 +533,19 @@ public class ApplicationView {
                 orderWindow.show();
             }
         }
+        
+        private Weekday getMenuDay() {
+            SingleSelectionModel<Tab> selection = menuPane.getSelectionModel();
+            Weekday day = null;
+            for (MenuTab menu : menus) {
+                if (selection.getSelectedItem().equals(menu.getTab())) {
+                    day = menu.getDay();
+                    break;
+                }
+            }
+            
+            return day; 
+        }
 
         /**
          * Add new dish handler
@@ -517,14 +556,18 @@ public class ApplicationView {
             if (event.getTarget() instanceof Button) {
                 Button add = (Button) event.getTarget();
                 String id = add.getId();
-
-                Iterator<Category> it = menu.iterator();
-                while (it.hasNext()) {
-                    Category group = it.next();
-                    if (group.getName().equals(id)) {
-                        newGroup = group;
-                        break;
+                List<Category> categories = null;
+                
+                try {
+                    categories = menu.getDayMenu(day);
+                    for(Category category: categories) {
+                        if (category.getName().equals(id)) {
+                            newGroup = category;
+                            break;
+                        }
                     }
+                } catch (RemoteException ex) {
+                    ex.printStackTrace();
                 }
 
                 newDish = new TextField();
@@ -541,8 +584,12 @@ public class ApplicationView {
                 Button btnAddDish = new Button("Hinzufügen");
                 btnAddDish.setPrefWidth(120);
                 btnAddDish.addEventHandler(ActionEvent.ACTION, (ActionEvent e) -> {
-                    newGroup.addDish(newDish.getText());
-                    refresh();
+                    try {
+                        menu.addDish(day, newGroup.getName(), newDish.getText());
+                    } catch (RemoteException ex) {
+                        ex.printStackTrace();
+                    }
+                    refresh(day);
 
                     newDish.setText("");
                     addWindow.close();
@@ -579,8 +626,13 @@ public class ApplicationView {
                 Button btnAddDCategorie = new Button("Hinzufügen");
                 btnAddDCategorie.setPrefWidth(120);
                 btnAddDCategorie.addEventHandler(ActionEvent.ACTION, (ActionEvent e) -> {
-                    menu.addGroup(newCategorie.getText());
-                    refresh();
+                    try { 
+                        menu.addCategory(newCategorie.getText());
+                    } catch (RemoteException ex) {
+                        ex.printStackTrace();
+                    }
+                    
+                    refreshMenu();
 
                     newCategorie.setText("");
                     addCategorieWindow.close();
@@ -603,35 +655,47 @@ public class ApplicationView {
      * 
      * @param mainStage
      */
-    public ApplicationView(Stage mainStage, String port) {  
-        System.out.println("rebinding rmi://" + port + "/Control");
+    public ApplicationView(Stage mainStage, String port) throws MalformedURLException,
+                                                                RemoteException, 
+                                                                NotBoundException {  
+        System.out.println("rmi://" + port + "/User");
+        System.out.println("rmi://" + port + "/Order");
+        System.out.println("rmi://" + port + "/Menu");
         
-        try {
-            ctrl = (ControlInterface) Naming.lookup("rmi://" + port + "/Control");
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        
+        //this.order = (OrderInterface) Naming.lookup("rmi://" + port + "/Order");
+        this.menu = (MenuInterface) Naming.lookup("rmi://" + port + "/Menu");
+        //this.userCtrl = (UserInterface) Naming.lookup("rmi://" + port + "/User");  
+            
+        this.usrCtrl = new UserManagement();
         this.mainStage = mainStage;
         this.menuPane = new TabPane();
         this.rootPane = new VBox();
         this.rootPane.setId("rootPane");
         this.login = new LoginPane();
         this.menus = new ArrayList<>();
+        
+        menus.add(new MenuTab(Weekday.MONDAY));
+        menus.add(new MenuTab(Weekday.TUESDAY));
+        menus.add(new MenuTab(Weekday.WEDNESDAY));
+        menus.add(new MenuTab(Weekday.THURSDAY));
+        menus.add(new MenuTab(Weekday.FRIDAY));
 
-        menus.add(new MenuTab(new DayMenu(Weekdays.MONDAY)));
-        menus.add(new MenuTab(new DayMenu(Weekdays.TUESDAY)));
-        menus.add(new MenuTab(new DayMenu(Weekdays.WEDNESDAY)));
-        menus.add(new MenuTab(new DayMenu(Weekdays.THURSDAY)));
-        menus.add(new MenuTab(new DayMenu(Weekdays.FRIDAY)));
-
-        generateDefaultContent();
-
-        for (MenuTab menu : menus) {
-            menuPane.getTabs().add(menu.show());
+        for (MenuTab menu: menus) {
+            menuPane.getTabs().add(menu.show());    
         }
-
+        
         this.menuPane.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
+    }
+    
+    public void run() throws RemoteException {
+        Random randGen = new Random();
+        try {
+            refreshMenu();
+            Thread.sleep(randGen.nextInt(100)+10);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        
     }
 
     /**
@@ -640,7 +704,7 @@ public class ApplicationView {
     public void show() {
         rootPane.getChildren().add(login.show());
         rootPane.getChildren().add(menuPane);
-
+        
         showMainWindow(new Scene(rootPane, SCENE_WIDTH, SCENE_HEIGHT));
     }
 
@@ -660,95 +724,11 @@ public class ApplicationView {
     /**
      * refresh the menu pane
      */
-    private void refreshMenu() {
+    private /*synchronized*/ void refreshMenu() {
         menuPane.getTabs().clear();
 
         for (MenuTab menu : menus) {
             menuPane.getTabs().add(menu.show());
         }
-    }
-
-    /**
-     * Generates default menu content
-     */
-    private void generateDefaultContent() {
-        generateMondayMenu(menus.get(0));
-        generateTuesdayMenu(menus.get(1));
-        generateWednesdayMenu(menus.get(2));
-        generateThursdayMenu(menus.get(3));
-        generateFridayMenu(menus.get(4));
-    }
-
-    private void generateMondayMenu(MenuTab menu) {
-        menu.addDish("Suppen", "Frittatensuppe");
-        menu.addDish("Suppen", "Gemüsesuppe");
-
-        menu.addDish("Aus der Pfanne und vom Grill",
-                "Rindergeschnetzeltes mit Sojasprossen,Bambussprossen dazu Eiernudel");
-        menu.addDish("Aus der Pfanne und vom Grill",
-                "Faschierte Laibchen Bella Italia mit frischen Kräutern, PetersilienerdÄpfel");
-
-        menu.addDish("Vegetarisch", "Weisser Spargel mit Sauce Hollandaise mit Kartoffel");
-        menu.addDish("Vegetarisch", "Pasta all' verdura, mit Parmesan und Blattsalaten");
-
-        menu.addDish("Desert", "Apfelstrudel mit Vanilleschaum");
-        menu.addDish("Desert", "Frisches Joghurt mit Himbeermousse");
-    }
-
-    private void generateTuesdayMenu(MenuTab menu) {
-        menu.addDish("Suppen", "Kürbiscremesuppe");
-        menu.addDish("Suppen", "Knoblauchcremesuppe");
-
-        menu.addDish("Aus der Pfanne und vom Grill", "Lasagne al forno auf Tomaten-Basilikumsauce");
-        menu.addDish("Aus der Pfanne und vom Grill",
-                "sterreichisches Steak vom Beiried mit Speckbohnen und PetersilienerdÄpfel");
-
-        menu.addDish("Vegetarisch", "Weisser Spargel mit Sauce Hollandaise mit Kartoffel");
-        menu.addDish("Vegetarisch", "Asiatisches Gemüse auf Reisbeet");
-
-        menu.addDish("Desert", "Schoko-Muffin mit flüssigem Kern");
-        menu.addDish("Desert", "Topfennockerl auf Erdbeerspiegel");
-    }
-
-    private void generateWednesdayMenu(MenuTab menu) {
-        menu.addDish("Suppen", "Zwiebelsuppe");
-        menu.addDish("Suppen", "Lebersuppe");
-
-        menu.addDish("Aus der Pfanne und vom Grill", "Putenfilet auf Champignonsauce dazu Kroketten");
-        menu.addDish("Aus der Pfanne und vom Grill", "Spaghetti Carbonara mit frischen Blattsalaten");
-
-        menu.addDish("Vegetarisch", "Schinken oder Krautfleckerl ");
-        menu.addDish("Vegetarisch", "Vegan: Spaghetti all' Arrabiata mit frischen Blattsalaten");
-
-        menu.addDish("Desert", "Waldviertler Mohnschnitte");
-        menu.addDish("Desert", "Vanille-Banana-Schoko Dessert");
-    }
-
-    private void generateThursdayMenu(MenuTab menu) {
-        menu.addDish("Suppen", "Spargelcremesuppe");
-        menu.addDish("Suppen", "Kohlrabisuppe");
-
-        menu.addDish("Aus der Pfanne und vom Grill", "Pasta mit cremiger Spargel Sauce");
-        menu.addDish("Aus der Pfanne und vom Grill", "Saftiges Naturschnitzerl vom Schwein mit PetersilienerdÄpfel ");
-
-        menu.addDish("Vegetarisch", "Frühlingsrolle mit Reis und Chilidip");
-        menu.addDish("Vegetarisch", "Pasta mit cremiger Spargel Sauce");
-
-        menu.addDish("Desert", "Apfelschlangerl");
-        menu.addDish("Desert", "Zitronen-Ingwer-Minz-Joghurttorte");
-    }
-
-    private void generateFridayMenu(MenuTab menu) {
-        menu.addDish("Suppen", "Kohlrabisuppe");
-        menu.addDish("Suppen", "Hühnersuppe");
-
-        menu.addDish("Aus der Pfanne und vom Grill", "Grillteller mit Pommes und Gemüse");
-        menu.addDish("Aus der Pfanne und vom Grill", "Pasta mit Schweinskarree-Streifen in Pfeffersauce");
-
-        menu.addDish("Vegetarisch", "Topfenknödel in Butterbräsel dazu Vanillesauce");
-        menu.addDish("Vegetarisch", "Kartoffelpuffer mit Joghurtdip und Blattsalat");
-
-        menu.addDish("Desert", "Topfenstrudel ");
-        menu.addDish("Desert", "Buchteln mit Powidlmarmelade und Vanilleschaum");
     }
 }

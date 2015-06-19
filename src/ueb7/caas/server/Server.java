@@ -6,30 +6,25 @@ import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.server.UnicastRemoteObject;
 
-public class Server {
-    
-    private static int getPort(String hostPort) {
-        int idx = hostPort.lastIndexOf(':');
-        
-        if (idx == -1) {
-            return 1099;
-        } else {
-            return Integer.parseInt(hostPort.substring(idx+1));
-        }
-    }
-    
-            
+public class Server implements ServerInterface {
     public static void main(String[] args) throws RemoteException, MalformedURLException {
-        String hostPort = args[0];
-        
-        LocateRegistry.createRegistry(getPort(hostPort));
-        ControlInterface controlStub = (ControlInterface) UnicastRemoteObject.exportObject(new Control(), 0);
-       
-        System.out.println("rebinding rmi://" + hostPort + "/Control");
-        
-        Naming.rebind("rmi://" + hostPort + "/Control", controlStub);
-
-        
-        System.out.println("DateService running, waiting for connections...");
+            String hostPort = args[0];
+            
+            OrderInterface orderStub = (OrderInterface)UnicastRemoteObject.exportObject(new OrderControl(), 0);
+            MenuInterface menuStub = (MenuInterface)UnicastRemoteObject.exportObject(new MenuControl(), 0);
+            UserInterface userStub = (UserInterface)UnicastRemoteObject.exportObject(new UserControl(), 0);
+            
+            LocateRegistry.createRegistry(Util.getPort(hostPort));
+            
+            System.out.println("rmi://" + hostPort + "/Order");
+            System.out.println("rmi://" + hostPort + "/Menu");
+            System.out.println("rmi://" + hostPort + "/User");
+            
+            Naming.rebind("rmi://" + hostPort + "/Order", orderStub);
+            Naming.rebind("rmi://" + hostPort + "/Menu", menuStub);
+            Naming.rebind("rmi://" + hostPort + "/User", userStub);
+            
+            System.out.println("Campina service is running, waiting for connections ... ");
     }
+   
 }

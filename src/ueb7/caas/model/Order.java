@@ -11,7 +11,7 @@ public class Order implements Serializable {
     private static final long serialVersionUID = 4145270647762572912L;
     
     private User user;
-    private Weekdays day;
+    private Weekday day;
     private List<String> dishes;
     
     /**
@@ -19,7 +19,7 @@ public class Order implements Serializable {
      * 
      * @param user
      */
-    public Order(User user, Weekdays day) {
+    public Order(User user, Weekday day) {
         this.user = user;
         this.day = day;
         dishes = new ArrayList<String>();

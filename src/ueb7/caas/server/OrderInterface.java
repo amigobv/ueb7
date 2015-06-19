@@ -4,11 +4,11 @@ import java.rmi.Remote;
 import java.rmi.RemoteException;
 import java.util.List;
 
-import ueb7.caas.model.Order;
 import ueb7.caas.model.User;
-import ueb7.caas.model.Weekdays;
+import ueb7.caas.model.Weekday;
 
-public interface OrderControlInterface extends Remote {
+public interface OrderInterface extends Remote {
+
     /**
      * Add dish to order
      * 
@@ -17,7 +17,7 @@ public interface OrderControlInterface extends Remote {
      * @param dish
      * @throws RemoteException
      */
-    void addDish(User user, Weekdays day, String dish) throws RemoteException;
+    void addDish(User user, Weekday day, String dish) throws RemoteException;
     
     /**
      * Remove Dis from order
@@ -43,5 +43,5 @@ public interface OrderControlInterface extends Remote {
      * @return
      * @throws RemoteException
      */
-    int noOfOrders() throws RemoteException;
+    int noOfDishes() throws RemoteException;
 }

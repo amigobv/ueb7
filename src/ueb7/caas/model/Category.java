@@ -1,5 +1,6 @@
 package ueb7.caas.model;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -10,7 +11,12 @@ import java.util.List;
  * @author s1310307036
  *
  */
-public class Category {
+public class Category implements Serializable {
+    /**
+     * 
+     */
+    private static final long serialVersionUID = -8178380472188092811L;
+    
     private String name;
     private List<String> dishes;
     
@@ -70,6 +76,15 @@ public class Category {
      */
     public boolean removeDish(String dish) {
         return dishes.remove(dish);
+    }
+    
+    /**
+     * Return a list with all dishes of a category
+     * 
+     * @return
+     */
+    public List<String> getDishes() {
+        return dishes;
     }
     
     /**

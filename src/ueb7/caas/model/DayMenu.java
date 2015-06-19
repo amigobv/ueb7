@@ -1,5 +1,6 @@
 package ueb7.caas.model;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -10,80 +11,105 @@ import java.util.List;
  * @author s1310307036
  *
  */
-public class DayMenu {
-    private Weekdays day;
-    private List<Category> groups;
-    
-    public DayMenu(Weekdays day) {
+public class DayMenu implements Serializable {
+    /**
+     * 
+     */
+    private static final long serialVersionUID = -189719834099965048L;
+
+    private Weekday day;
+    private List<Category> categories;
+
+    public DayMenu(Weekday day) {
         this.day = day;
-        groups = new ArrayList<Category>();
+        categories = new ArrayList<Category>();
     }
-    
-    
+
     /**
      * Returns the name of the Menu.
      * 
      * @return
      */
-    public Weekdays getDay(){
+    public Weekday getDay() {
         return day;
     }
-    
+
     /**
      * Adds a group to the menu.
      * 
-     * @param name
+     * @param category
      */
-    public void addGroup(String name) {
-        Category group = new Category(name);
-        if (!groups.contains(group)) {
-            groups.add(group);
+    public void addCategory(String category) {
+        Category cat = new Category(category);
+        if (!categories.contains(cat)) {
+            categories.add(cat);
         }
     }
-    
+
+    /**
+     * remove a group from the menu.
+     * 
+     * @param category
+     */
+    public void removeCategory(String category) {
+        Category cat = findGroupByName(category);
+        if (cat == null) {
+            return;
+        }
+
+        List<String> dishes = cat.getDishes();
+        if (dishes == null) {
+            return;
+        }
+
+        for (int i = 0; i < dishes.size(); i++) {
+            dishes.remove(i);
+        }
+    }
+
     /**
      * Adds a dish to a specific group in menu.
      * 
-     * @param groupName
+     * @param category
      * @param dish
      */
-    public void addDish(String groupName, String dish) {
-        addGroup(groupName);
-        
-        Category group = findGroupByName(groupName);
-        
+    public void addDish(String category, String dish) {
+        addCategory(category);
+
+        Category group = findGroupByName(category);
+
         if (group != null) {
-            group.addDish(dish); 
+            group.addDish(dish);
         }
     }
-    
-    public void removeDish(String groupName, String name) {
-        Category group = findGroupByName(groupName);
-        
+
+    public void removeDish(String category, String dish) {
+        Category group = findGroupByName(category);
+
         if (group != null) {
-            group.removeDish(name); 
+            group.removeDish(dish);
         }
     }
-    
+
     private Category findGroupByName(String name) {
-        for (Category group: groups) {
+        for (Category group : categories) {
             if (group.getName().equals(name)) {
                 return group;
             }
         }
-        
-        return null;    
+
+        return null;
     }
-    
+
     /**
      * Menu iterator.
      * 
      * @return
      */
     public Iterator<Category> iterator() {
-        return groups.iterator();
+        return categories.iterator();
     }
-    
+
     /**
      * return the number of dishes from the menu
      * 
@@ -91,22 +117,31 @@ public class DayMenu {
      */
     public int noOfDishes() {
         int size = 0;
-        
-        for (Category group: groups) {
+
+        for (Category group : categories) {
             size += group.size();
         }
-        
+
         return size;
     }
-    
+
+    public List<Category> getMenu() {
+        return categories;
+    }
+
+    @Override
     public String toString() {
         String ret = day.name() + " :\n";
-        
-        for (Category group: groups) {
+
+        for (Category group : categories) {
             ret += group.toString();
         }
-        
+
         return ret;
     }
-    
+
+    @Override
+    public boolean equals(Object o) {
+        return day.toString().equals(((DayMenu) o).day.toString());
+    }
 }
